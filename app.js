@@ -1,3 +1,5 @@
+// app.js - SkullHunter Invoice Generator (INR formatting + fixes)
+
 // Invoice Data Model
 const invoiceData = {
     logo: null,
@@ -32,77 +34,62 @@ document.addEventListener('DOMContentLoaded', () => {
 function initializeApp() {
     // Set default date to today
     const today = new Date().toISOString().split('T')[0];
-    document.getElementById('invoiceDate').value = today;
+    const dateEl = document.getElementById('invoiceDate');
+    if (dateEl) {
+        dateEl.value = today;
+    }
     invoiceData.invoiceDate = today;
     renderInvoicePreview();
 }
 
 function setupEventListeners() {
     // Logo upload
-    document.getElementById('logoUpload').addEventListener('change', handleLogoUpload);
+    const logoEl = document.getElementById('logoUpload');
+    if (logoEl) logoEl.addEventListener('change', handleLogoUpload);
+
+    // Helper binding
+    const bind = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', (e) => { fn(e.target.value); renderInvoicePreview(); });
+    };
 
     // Business information
-    document.getElementById('businessName').addEventListener('input', (e) => {
-        invoiceData.business.name = e.target.value;
-        renderInvoicePreview();
-    });
-    document.getElementById('businessAddress').addEventListener('input', (e) => {
-        invoiceData.business.address = e.target.value;
-        renderInvoicePreview();
-    });
-    document.getElementById('businessEmail').addEventListener('input', (e) => {
-        invoiceData.business.email = e.target.value;
-        renderInvoicePreview();
-    });
-    document.getElementById('businessPhone').addEventListener('input', (e) => {
-        invoiceData.business.phone = e.target.value;
-        renderInvoicePreview();
-    });
+    bind('businessName', v => invoiceData.business.name = v);
+    bind('businessAddress', v => invoiceData.business.address = v);
+    bind('businessEmail', v => invoiceData.business.email = v);
+    bind('businessPhone', v => invoiceData.business.phone = v);
 
     // Client information
-    document.getElementById('clientName').addEventListener('input', (e) => {
-        invoiceData.client.name = e.target.value;
-        renderInvoicePreview();
-    });
-    document.getElementById('clientAddress').addEventListener('input', (e) => {
-        invoiceData.client.address = e.target.value;
-        renderInvoicePreview();
-    });
-    document.getElementById('clientEmail').addEventListener('input', (e) => {
-        invoiceData.client.email = e.target.value;
-        renderInvoicePreview();
-    });
-    document.getElementById('clientPhone').addEventListener('input', (e) => {
-        invoiceData.client.phone = e.target.value;
-        renderInvoicePreview();
-    });
+    bind('clientName', v => invoiceData.client.name = v);
+    bind('clientAddress', v => invoiceData.client.address = v);
+    bind('clientEmail', v => invoiceData.client.email = v);
+    bind('clientPhone', v => invoiceData.client.phone = v);
 
     // Invoice metadata
-    document.getElementById('invoiceNumber').addEventListener('input', (e) => {
-        invoiceData.invoiceNumber = e.target.value;
-        renderInvoicePreview();
-    });
-    document.getElementById('invoiceDate').addEventListener('input', (e) => {
-        invoiceData.invoiceDate = e.target.value;
-        renderInvoicePreview();
-    });
+    bind('invoiceNumber', v => invoiceData.invoiceNumber = v);
+    const invDate = document.getElementById('invoiceDate');
+    if (invDate) invDate.addEventListener('input', (e) => { invoiceData.invoiceDate = e.target.value; renderInvoicePreview(); });
 
     // Tax percentage
-    document.getElementById('taxPercentage').addEventListener('input', (e) => {
+    const taxEl = document.getElementById('taxPercentage');
+    if (taxEl) taxEl.addEventListener('input', (e) => {
         invoiceData.taxPercentage = parseFloat(e.target.value) || 0;
         calculateTotals();
         renderInvoicePreview();
     });
 
     // Action buttons
-    document.getElementById('addItemBtn').addEventListener('click', addLineItem);
-    document.getElementById('downloadPdfBtn').addEventListener('click', generatePDF);
-    document.getElementById('printBtn').addEventListener('click', printInvoice);
+    const addBtn = document.getElementById('addItemBtn');
+    if (addBtn) addBtn.addEventListener('click', addLineItem);
+    const pdfBtn = document.getElementById('downloadPdfBtn');
+    if (pdfBtn) pdfBtn.addEventListener('click', generatePDF);
+    const printBtn = document.getElementById('printBtn');
+    if (printBtn) printBtn.addEventListener('click', printInvoice);
 }
 
 // Logo Upload Handler
 function handleLogoUpload(event) {
-    const file = event.target.files[0];
+    const file = event.target.files && event.target.files[0];
     
     if (!file) return;
 
@@ -179,13 +166,15 @@ function updateLineItem(id, field, value) {
 
 function renderLineItemInputs() {
     const container = document.getElementById('lineItemsContainer');
+    if (!container) return;
     container.innerHTML = '';
 
     invoiceData.lineItems.forEach(item => {
         const itemDiv = document.createElement('div');
         itemDiv.className = 'line-item';
+        // Keep inline handlers for simplicity (they call global functions)
         itemDiv.innerHTML = `
-            <input type="text" placeholder="Description" value="${item.description}" 
+            <input type="text" placeholder="Description" value="${escapeHtml(item.description)}" 
                    onchange="updateLineItem('${item.id}', 'description', this.value)">
             <div class="line-item-row">
                 <input type="number" placeholder="Quantity" value="${item.quantity}" min="0" step="1"
@@ -208,7 +197,7 @@ function calculateLineItemAmount(item) {
 }
 
 function calculateSubtotal() {
-    return invoiceData.lineItems.reduce((sum, item) => sum + item.amount, 0);
+    return invoiceData.lineItems.reduce((sum, item) => sum + (item.amount || 0), 0);
 }
 
 function calculateTax() {
@@ -227,35 +216,54 @@ function calculateTotals() {
 
 // Formatting Functions
 function formatCurrency(amount) {
-    return '$' + amount.toFixed(2);
+    // Use Indian formatting and INR currency symbol
+    const n = Number(amount) || 0;
+    return n.toLocaleString('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
 }
 
 function formatDate(dateString) {
     if (!dateString) return '-';
     const date = new Date(dateString + 'T00:00:00');
-    return date.toLocaleDateString('en-US', { 
+    // Use a familiar long format; you can change locale if needed
+    return date.toLocaleDateString('en-IN', { 
         year: 'numeric', 
         month: 'long', 
         day: 'numeric' 
     });
 }
 
+function escapeHtml(s) {
+    return String(s || '').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
 // Invoice Preview Rendering
 function renderInvoicePreview() {
     // Logo
     const logoImg = document.getElementById('previewLogo');
-    if (invoiceData.logo) {
-        logoImg.src = invoiceData.logo;
-        logoImg.style.display = 'block';
-    } else {
-        logoImg.style.display = 'none';
+    if (logoImg) {
+        if (invoiceData.logo) {
+            logoImg.src = invoiceData.logo;
+            logoImg.style.display = 'block';
+        } else {
+            logoImg.style.display = 'none';
+        }
     }
 
     // Business information
-    document.getElementById('previewBusinessName').textContent = invoiceData.business.name;
-    document.getElementById('previewBusinessAddress').textContent = invoiceData.business.address;
-    document.getElementById('previewBusinessEmail').textContent = invoiceData.business.email;
-    document.getElementById('previewBusinessPhone').textContent = invoiceData.business.phone;
+    const setText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text || '';
+    };
+
+    setText('previewBusinessName', invoiceData.business.name);
+    setText('previewBusinessAddress', invoiceData.business.address);
+    setText('previewBusinessEmail', invoiceData.business.email);
+    setText('previewBusinessPhone', invoiceData.business.phone);
 
     // Hide empty business fields
     toggleVisibility('previewBusinessName', invoiceData.business.name);
@@ -264,10 +272,10 @@ function renderInvoicePreview() {
     toggleVisibility('previewBusinessPhone', invoiceData.business.phone);
 
     // Client information
-    document.getElementById('previewClientName').textContent = invoiceData.client.name;
-    document.getElementById('previewClientAddress').textContent = invoiceData.client.address;
-    document.getElementById('previewClientEmail').textContent = invoiceData.client.email;
-    document.getElementById('previewClientPhone').textContent = invoiceData.client.phone;
+    setText('previewClientName', invoiceData.client.name);
+    setText('previewClientAddress', invoiceData.client.address);
+    setText('previewClientEmail', invoiceData.client.email);
+    setText('previewClientPhone', invoiceData.client.phone);
 
     // Hide empty client fields
     toggleVisibility('previewClientName', invoiceData.client.name);
@@ -276,21 +284,28 @@ function renderInvoicePreview() {
     toggleVisibility('previewClientPhone', invoiceData.client.phone);
 
     // Invoice metadata
-    document.getElementById('previewInvoiceNumber').textContent = invoiceData.invoiceNumber || '-';
-    document.getElementById('previewInvoiceDate').textContent = formatDate(invoiceData.invoiceDate);
+    const invNumEl = document.getElementById('previewInvoiceNumber');
+    if (invNumEl) invNumEl.textContent = invoiceData.invoiceNumber || '-';
+    const invDateEl = document.getElementById('previewInvoiceDate');
+    if (invDateEl) invDateEl.textContent = formatDate(invoiceData.invoiceDate);
 
     // Line items
     renderLineItemsPreview();
 
     // Totals
-    document.getElementById('previewSubtotal').textContent = formatCurrency(invoiceData.subtotal);
-    document.getElementById('previewTaxPercentage').textContent = invoiceData.taxPercentage.toFixed(2);
-    document.getElementById('previewTaxAmount').textContent = formatCurrency(invoiceData.taxAmount);
-    document.getElementById('previewTotal').textContent = formatCurrency(invoiceData.total);
+    const subEl = document.getElementById('previewSubtotal');
+    if (subEl) subEl.textContent = formatCurrency(invoiceData.subtotal);
+    const taxPctEl = document.getElementById('previewTaxPercentage');
+    if (taxPctEl) taxPctEl.textContent = (Number(invoiceData.taxPercentage) || 0).toFixed(2);
+    const taxAmtEl = document.getElementById('previewTaxAmount');
+    if (taxAmtEl) taxAmtEl.textContent = formatCurrency(invoiceData.taxAmount);
+    const totEl = document.getElementById('previewTotal');
+    if (totEl) totEl.textContent = formatCurrency(invoiceData.total);
 }
 
 function renderLineItemsPreview() {
     const tbody = document.getElementById('previewLineItems');
+    if (!tbody) return;
     
     if (invoiceData.lineItems.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No items added yet</td></tr>';
@@ -299,16 +314,17 @@ function renderLineItemsPreview() {
 
     tbody.innerHTML = invoiceData.lineItems.map(item => `
         <tr>
-            <td>${item.description || '-'}</td>
+            <td>${escapeHtml(item.description || '-')}</td>
             <td>${item.quantity}</td>
-            <td>${formatCurrency(item.rate)}</td>
-            <td>${formatCurrency(item.amount)}</td>
+            <td style="text-align:right;">${formatCurrency(item.rate)}</td>
+            <td style="text-align:right;">${formatCurrency(item.amount)}</td>
         </tr>
     `).join('');
 }
 
 function toggleVisibility(elementId, value) {
     const element = document.getElementById(elementId);
+    if (!element) return;
     element.style.display = value ? 'block' : 'none';
 }
 
@@ -317,6 +333,7 @@ async function generatePDF() {
     try {
         const { jsPDF } = window.jspdf;
         const invoice = document.getElementById('invoicePreview');
+        if (!invoice) { alert('Invoice preview not found'); return; }
         
         // Create canvas from invoice preview
         const canvas = await html2canvas(invoice, {
@@ -334,10 +351,9 @@ async function generatePDF() {
         const imgData = canvas.toDataURL('image/png');
         pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
         
-        // Generate filename
-        const filename = invoiceData.invoiceNumber 
-            ? `Invoice-${invoiceData.invoiceNumber}.pdf`
-            : `Invoice-${Date.now()}.pdf`;
+        // Generate filename (no currency symbol in filename)
+        const safeInvoiceNum = String(invoiceData.invoiceNumber || '').replace(/[^\w\-]/g, '');
+        const filename = safeInvoiceNum ? `Invoice-${safeInvoiceNum}.pdf` : `Invoice-${Date.now()}.pdf`;
         
         // Download
         pdf.save(filename);
